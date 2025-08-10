@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <title>FIFA Statistik-Tracker</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+    <!-- Roboto Google Fonts -->
+    <link href="https://fonts.googleapis.com/css?family=Roboto:400,500,700&display=swap" rel="stylesheet">
+    <!-- Tailwind CSS via CDN -->
+    <link href="css/tailwind-play-output.css" rel="stylesheet">
+    <!-- Flowbite CSS & JS via CDN -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/flowbite/2.3.0/flowbite.min.css" rel="stylesheet" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/flowbite/2.3.0/flowbite.min.js"></script>
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .cell-aek { background: #eaf4ff !important; }
+        .cell-real { background: #ffecec !important; }
+        .player-card { transition: all 0.3s ease; }
+        .player-card:hover { transform: translateY(-2px); box-shadow: 0 4px 6px rgba(0,0,0,0.1);}
+        .modal {
+            z-index: 50; background: rgba(0,0,0,0.3); position: fixed; inset: 0;
+            display: flex; align-items: flex-end; justify-content: center;
+        }
+        .modal-content {
+            background: #fff; width: 100%; max-width: 24rem; border-radius: 0.75rem 0.75rem 0 0;
+            padding: 1.5rem; box-shadow: 0 -2px 16px rgba(0,0,0,0.2); position: relative;
+            animation: slideInFromBottom 0.2s;
+        }
+        @keyframes slideInFromBottom {
+            from { transform: translateY(80px); opacity: 0;}
+            to { transform: translateY(0); opacity: 1;}
+        }
+        @media (max-width: 700px) {
+            .modal-content {
+                width: 98vw !important; min-width: 0 !important; max-width: 98vw !important;
+                border-radius: 12px 12px 0 0 !important; padding: 1rem !important;
+                left: 0 !important; right: 0 !important; top: auto !important; bottom: 0 !important;
+                position: absolute !important; max-height: 95vh !important; overflow-y: auto !important;
+            }
+            .modal {
+                align-items: flex-end !important; justify-content: center !important;
+            }
+        }
+        .nav-indicator {
+            display: block;
+            width: 10px;
+            height: 10px;
+            margin: 3px auto 0 auto;
+            border-radius: 50%;
+            background: transparent;
+            box-shadow: none;
+            transition: background 0.2s, box-shadow 0.2s;
+        }
+        .nav-indicator.active.indicator-squad    { background: #2563eb; box-shadow: 0 0 8px #60a5fa; }
+        .nav-indicator.active.indicator-matches  { background: #e11d48; box-shadow: 0 0 8px #fb7185; }
+        .nav-indicator.active.indicator-bans     { background: #eab308; box-shadow: 0 0 8px #fde047; }
+        .nav-indicator.active.indicator-finanzen { background: #16a34a; box-shadow: 0 0 8px #4ade80; }
+        .nav-indicator.active.indicator-stats    { background: #8b5cf6; box-shadow: 0 0 8px #a78bfa; }
+        .nav-indicator.active.indicator-spieler  { background: orange; box-shadow: 0 0 8px #f9a825; }
+    </style>
+</head>
+<body class="bg-gray-100 dark:bg-gray-900 font-sans transition-colors">
+<div id="login-area"></div>
+<div class="app-container mx-auto bg-white dark:bg-gray-800 shadow-lg relative overflow-hidden max-w-screen-xl min-h-screen" style="display:none;">
+    <!-- NAVBAR -->
+    <nav class="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 py-2.5">
+      <div class="flex flex-wrap justify-between items-center mx-auto max-w-screen-xl">
+        <a href="#" class="flex items-center">
+          <img src="assets/logo.png" class="h-8 mr-3" alt="Logo" />
+          <span class="self-center text-xl font-semibold whitespace-nowrap dark:text-white">FIFA Statistik-Tracker</span>
+        </a>
+        <div class="flex items-center gap-2">
+          <!-- Logout Button oben rechts (Icon-Button) -->
+          <button id="logout-btn" title="Logout" class="inline-flex items-center justify-center border font-sans font-medium text-center transition-all duration-300 ease-in disabled:opacity-50 disabled:shadow-none disabled:cursor-not-allowed text-sm rounded-md py-2 px-3 shadow-sm hover:shadow-md bg-red-500 border-red-500 text-red-50 hover:bg-red-400 hover:border-red-400" style="min-width:40px;">
+            <i class="fas fa-sign-out-alt"></i>
+          </button>
+          <button data-collapse-toggle="navbar-default" type="button" class="inline-flex items-center p-2 ml-1 text-sm text-gray-500 rounded-lg lg:hidden hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-200 dark:text-gray-400 dark:hover:bg-gray-700 dark:focus:ring-gray-600" aria-controls="navbar-default" aria-expanded="false">
+            <span class="sr-only">Menü öffnen</span>
+            <svg class="w-6 h-6" aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
+            </svg>
+          </button>
+        </div>
+        <div class="hidden w-full lg:block lg:w-auto" id="navbar-default">
+          <ul class="flex flex-col font-medium mt-4 rounded-lg bg-gray-50 lg:flex-row lg:space-x-8 lg:mt-0 lg:bg-white dark:bg-gray-800 lg:dark:bg-gray-800">
+            <li>
+              <a id="squad-tab" href="#" class="block py-2 pl-3 pr-4 text-white bg-blue-700 rounded lg:bg-transparent lg:text-blue-700 lg:p-0 dark:text-white" aria-current="page">
+                <i class="fas fa-users mr-1 text-blue-600"></i> Kader
+              </a>
+            </li>
+            <li>
+              <a id="matches-tab" href="#" class="block py-2 pl-3 pr-4 text-gray-700 rounded hover:bg-gray-100 lg:hover:bg-transparent lg:border-0 lg:hover:text-blue-700 lg:p-0 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white lg:dark:hover:bg-transparent">
+                <i class="fas fa-futbol mr-1 text-rose-600"></i> Spiele
+              </a>
+            </li>
+            <li>
+              <a id="bans-tab" href="#" class="block py-2 pl-3 pr-4 text-gray-700 rounded hover:bg-gray-100 lg:hover:bg-transparent lg:border-0 lg:hover:text-blue-700 lg:p-0 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white lg:dark:hover:bg-transparent">
+                <i class="fas fa-ban mr-1 text-yellow-500"></i> Sperren
+              </a>
+            </li>
+            <li>
+              <a id="finanzen-tab" href="#" class="block py-2 pl-3 pr-4 text-gray-700 rounded hover:bg-gray-100 lg:hover:bg-transparent lg:border-0 lg:hover:text-blue-700 lg:p-0 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white lg:dark:hover:bg-transparent">
+                <i class="fas fa-euro-sign mr-1 text-green-600"></i> Finanzen
+              </a>
+            </li>
+            <li>
+              <a id="stats-tab" href="#" class="block py-2 pl-3 pr-4 text-gray-700 rounded hover:bg-gray-100 lg:hover:bg-transparent lg:border-0 lg:hover:text-blue-700 lg:p-0 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white lg:dark:hover:bg-transparent">
+                <i class="fas fa-chart-bar mr-1 text-purple-600"></i> Stats
+              </a>
+            </li>
+            <li>
+              <a id="spieler-tab" href="#" class="block py-2 pl-3 pr-4 text-gray-700 rounded hover:bg-gray-100 lg:hover:bg-transparent lg:border-0 lg:hover:text-blue-700 lg:p-0 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white lg:dark:hover:bg-transparent">
+                <i class="fas fa-star mr-1 text-orange-500"></i> Spieler
+              </a>
+            </li>
+          </ul>
+        </div>
+      </div>
+    </nav>
+    <!-- NAVBAR END -->
+
+    <!-- BOTTOM NAVIGATION (Mobile) -->
+    <nav id="bottom-nav" class="fixed bottom-0 left-0 w-full bg-white shadow-md flex justify-between items-center px-4 py-2 lg:hidden" style="z-index:40;">
+      <a id="nav-squad" href="#" class="flex flex-col items-center">
+        <i class="fas fa-users text-blue-600"></i>
+        <span>Kader</span>
+        <span class="nav-indicator"></span>
+      </a>
+      <a id="nav-matches" href="#" class="flex flex-col items-center">
+        <i class="fas fa-futbol text-rose-600"></i>
+        <span>Spiele</span>
+        <span class="nav-indicator"></span>
+      </a>
+      <a id="nav-bans" href="#" class="flex flex-col items-center">
+        <i class="fas fa-ban text-yellow-500"></i>
+        <span>Sperren</span>
+        <span class="nav-indicator"></span>
+      </a>
+      <a id="nav-finanzen" href="#" class="flex flex-col items-center">
+        <i class="fas fa-euro-sign text-green-600"></i>
+        <span>Finanzen</span>
+        <span class="nav-indicator"></span>
+      </a>
+      <a id="nav-stats" href="#" class="flex flex-col items-center">
+        <i class="fas fa-chart-bar text-purple-600"></i>
+        <span>Stats</span>
+        <span class="nav-indicator"></span>
+      </a>
+      <a id="nav-spieler" href="#" class="flex flex-col items-center">
+        <i class="fas fa-star text-orange-500"></i>
+        <span>Spieler</span>
+        <span class="nav-indicator"></span>
+      </a>
+    </nav>
+
+    <main class="p-2 pb-8 relative min-h-[calc(100vh-120px)]">
+        <!-- Loader -->
+        <div id="tab-loader" class="fixed top-0 left-0 w-full h-full bg-black bg-opacity-10 flex items-center justify-center z-50" style="display:none;">
+            <div class="w-12 h-12 border-4 border-blue-500 border-t-transparent border-solid rounded-full animate-spin"></div>
+        </div>
+        <div id="app"></div>
+    </main>
+</div>
+<div id="modal-root"></div>
+<!-- WICHTIG: Nur ein Einstiegspunkt! -->
+<script type="module" src="./main.js"></script>
+</body>
+</html>
