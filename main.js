@@ -24,6 +24,7 @@ let tabButtonsInitialized = false;
 let realtimeChannel = null;
 let isAppVisible = true;
 let inactivityCleanupTimer = null;
+let isInitializing = false;
 
 console.log("main.js gestartet");
 
@@ -93,24 +94,34 @@ function handleVisibilityChange() {
             inactivityCleanupTimer = null;
         }
         connectionMonitor.resumeHealthChecks();
-        supabase.auth.getSession().then(({data: {session}}) => {
-            if(session) {
-                // NEU: Reset aller lokalen Daten-States
-				tabButtonsInitialized = false;
-                liveSyncInitialized = false;
-                if (typeof resetKaderState === "function") resetKaderState();
-                if (typeof resetBansState === "function") resetBansState();
-                if (typeof resetFinanzenState === "function") resetFinanzenState();
-                if (typeof resetMatchesState === "function") resetMatchesState();
-                if (typeof resetStatsState === "function") resetStatsState();
-                if (typeof resetSpielerState === "function") resetSpielerState();
-                setupTabButtons();
-                subscribeAllLiveSync();
-                renderCurrentTab(); // <-- erzwingt Daten-Reload!
-            } else {
+        
+        // Small delay to ensure tab is fully active before reinitializing
+        setTimeout(async () => {
+            try {
+                const {data: {session}} = await supabase.auth.getSession();
+                if(session) {
+                    console.log('Tab became visible - reinitializing app with session');
+                    // Reset aller lokalen Daten-States
+                    tabButtonsInitialized = false;
+                    liveSyncInitialized = false;
+                    if (typeof resetKaderState === "function") resetKaderState();
+                    if (typeof resetBansState === "function") resetBansState();
+                    if (typeof resetFinanzenState === "function") resetFinanzenState();
+                    if (typeof resetMatchesState === "function") resetMatchesState();
+                    if (typeof resetStatsState === "function") resetStatsState();
+                    if (typeof resetSpielerState === "function") resetSpielerState();
+                    setupTabButtons();
+                    subscribeAllLiveSync();
+                    renderCurrentTab(); // <-- erzwingt Daten-Reload!
+                } else {
+                    console.log('Tab became visible but no session - showing login');
+                    renderLoginArea();
+                }
+            } catch (error) {
+                console.error('Error during tab visibility reinitialization:', error);
                 renderLoginArea();
             }
-        });
+        }, 100);
     }
 }
 
@@ -264,32 +275,41 @@ function setupLogoutButton() {
 }
 
 async function renderLoginArea() {
-	console.log("renderLoginArea aufgerufen");
-    const loginDiv = document.getElementById('login-area');
-    const appContainer = document.querySelector('.app-container');
-    if (!loginDiv || !appContainer) {
-        document.body.innerHTML = `<div style="color:red;padding:2rem;text-align:center">
-          Kritischer Fehler: UI-Container nicht gefunden.<br>
-          Bitte Seite neu laden oder Admin kontaktieren.
-        </div>`;
+    if (isInitializing) {
+        console.log("renderLoginArea already initializing, skipping...");
         return;
     }
-    const logoutBtn = document.getElementById('logout-btn');
-    const { data: { session } } = await supabase.auth.getSession();
-    if (session) {
-        loginDiv.innerHTML = "";
-        appContainer.style.display = '';
-        if (logoutBtn) logoutBtn.style.display = "";
-        setupLogoutButton();
-        setupTabButtons();
-        connectionMonitor.addListener(updateConnectionStatus);
-        if (!tabButtonsInitialized) {
-            switchTab(currentTab);
-        } else {
-            renderCurrentTab();
+    
+    isInitializing = true;
+    console.log("renderLoginArea aufgerufen");
+    
+    try {
+        const loginDiv = document.getElementById('login-area');
+        const appContainer = document.querySelector('.app-container');
+        if (!loginDiv || !appContainer) {
+            document.body.innerHTML = `<div style="color:red;padding:2rem;text-align:center">
+              Kritischer Fehler: UI-Container nicht gefunden.<br>
+              Bitte Seite neu laden oder Admin kontaktieren.
+            </div>`;
+            return;
         }
-        subscribeAllLiveSync();
-    } else {
+        const logoutBtn = document.getElementById('logout-btn');
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) {
+            loginDiv.innerHTML = "";
+            appContainer.style.display = '';
+            if (logoutBtn) logoutBtn.style.display = "";
+            setupLogoutButton();
+            const wasTabButtonsInitialized = tabButtonsInitialized;
+            setupTabButtons();
+            connectionMonitor.addListener(updateConnectionStatus);
+            subscribeAllLiveSync();
+            if (!wasTabButtonsInitialized) {
+                switchTab(currentTab);
+            } else {
+                renderCurrentTab();
+            }
+        } else {
         // Das Loginformular NICHT komplett neu bauen, sondern Felder erhalten!
         let emailValue = "";
         let pwValue = "";
@@ -328,6 +348,9 @@ async function renderLoginArea() {
                 await signIn(email.value, pw.value);
             };
         }
+        }
+    } finally {
+        isInitializing = false;
     }
 }
 
@@ -338,7 +361,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     await renderLoginArea();
 });
 
-//document.addEventListener('visibilitychange', handleVisibilityChange);
+document.addEventListener('visibilitychange', handleVisibilityChange);
 window.addEventListener('beforeunload', () => {
     cleanupRealtimeSubscriptions();
     if (inactivityCleanupTimer) {
